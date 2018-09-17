@@ -77,7 +77,7 @@ def load_features_set(data_type, network = 'Resnet50'):
     maybe_download_bottleneck(cfg.RPKIT_Storage, bottleneck_file)
     
     bottleneck_path = os.path.join(cfg.BASE_DIR,'models','bottleneck_features', bottleneck_file)
-    bottleneck_features = np.load(bottleneck_path)['set_type'] #[data_type]
+    bottleneck_features = np.load(bottleneck_path)[data_type]
 
     return bottleneck_features
 
