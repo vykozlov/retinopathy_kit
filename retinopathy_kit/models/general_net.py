@@ -104,18 +104,12 @@ def predict_file(img_path, network='Resnet50'):
     predicted_vector = net_model.predict(bottleneck_feature)
     print(predicted_vector)
     print("Sum:", np.sum(predicted_vector))
-    # return label that is predicted by the model
-    idxs = np.argsort(predicted_vector[0])[::-1][:5] 
+    
     labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
-    #labels_best = [ labels_names[i] for i in idxs ]
-    labels_best = []
-    probs_best = []
-    for i in idxs:
-        labels_best.append(labels[i])
-        probs_best.append(predicted_vector[0][i])
+    for i in len(labels):
         print(labels[i], " : ", predicted_vector[0][i]) 
 
-    return mutils.format_prediction(labels_best, probs_best)
+    return mutils.format_prediction(labels, predicted_vector)
 
 
 def predict_data(img, network='Resnet50'):
@@ -155,7 +149,7 @@ def train(nepochs=10, network='Resnet50'):
     """
     
     # check if directories for train, tests, and valid exist:
-    dutils.maybe_download_and_extract()
+    #dutils.maybe_download_and_extract()
     
     Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data', cfg.RPKIT_DataDir)
     train_files, train_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'train'))

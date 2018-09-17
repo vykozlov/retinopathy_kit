@@ -12,9 +12,6 @@ def format_prediction(labels, probabilities):
         pred = {
             "label": name,
             "probability": float(prob),
-            "info": {
-                "links": [{"link": 'Google images', "url": image_link(name)},
-                          {"link": 'Wikipedia', "url": wikipedia_link(name)}],
             },
         }
         d["predictions"].append(pred)
