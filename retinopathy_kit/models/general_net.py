@@ -106,10 +106,11 @@ def predict_file(img_path, network='Resnet50'):
     print("Sum:", np.sum(predicted_vector))
     
     labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
-    for i in len(labels):
+    print("len_labels: ", len(labels))
+    for i in range(len(labels)):
         print(labels[i], " : ", predicted_vector[0][i]) 
 
-    return mutils.format_prediction(labels, predicted_vector)
+    return mutils.format_prediction(labels, predicted_vector[0])
 
 
 def predict_data(img, network='Resnet50'):
@@ -154,11 +155,11 @@ def train(nepochs=10, network='Resnet50'):
     Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data', cfg.RPKIT_DataDir)
     train_files, train_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'train'))
     valid_files, valid_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'valid'))
-    test_files, test_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'valid'))
+    test_files, test_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'test'))
     
     train_net = bfeatures.load_features_set('train', network)
     valid_net = bfeatures.load_features_set('valid', network)
-    test_net = bfeatures.load_features_set('valid', network)
+    test_net = bfeatures.load_features_set('test', network)
     
     print("Sizes test_files and test_targets::")    
     print(test_files.shape) #, test_targets.shape)

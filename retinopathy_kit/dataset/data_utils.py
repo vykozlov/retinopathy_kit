@@ -74,11 +74,8 @@ def load_dataset(data_path):
     df = pd.read_csv(cfg.RPKIT_LabelsTrain)
     print(df.head(10))
     
-    #targets = [ df.loc[df['image'] == f, 'level'] for f in files ]
-    #print(targets[:10])
-    
     df = df.loc[df['image'].isin(files)]
-    #df = df.sort_values('image', axis=0)
+    df = df.sort_values('image', axis=0)
     print(df.head(20))
     
     levels = df['level'].values
