@@ -14,7 +14,7 @@ import retinopathy_kit.config as cfg
 import retinopathy_kit.dataset.data_utils as dutils
 import retinopathy_kit.models.model_utils as mutils
 import retinopathy_kit.features.build_features as bfeatures
-from keras.layers import Dense, GlobalAveragePooling2D
+from keras.layers import Dense, GlobalAveragePooling2D, Conv2D
 from keras.models import Sequential
 from keras.callbacks import ModelCheckpoint
 from keras import backend
@@ -61,8 +61,9 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #}
 
     net_model = Sequential()
+    #net_model.add(Conv2D(256, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
+    net_model.add(Conv2D(128, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
     net_model.add(GlobalAveragePooling2D(input_shape=train_net.shape[1:]))
-    #net_model.add(GlobalAveragePooling2D(input_shape=features_shape[network]))
     net_model.add(Dense(nclasses, activation='softmax'))
 
     print("__"+network+"__: ")

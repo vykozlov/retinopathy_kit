@@ -50,7 +50,7 @@ def predict_url(*args):
     return gennet.predict_url(*args)
         
 
-def train(nepochs=25):
+def train(nepochs=15):
     """
     Simple call to gennet.train() using Resnet50
     """ 
