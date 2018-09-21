@@ -4,7 +4,7 @@ Created on Mon Sep  3 21:29:57 2018
 
 @author: valentin
 """
-
+import argparse
 import retinopathy_kit.config as cfg
 import retinopathy_kit.models.general_net as gennet
 
@@ -17,13 +17,6 @@ def get_metadata():
     meta['Name'] = "Retinopathy_Resnet50"
 
     return meta
-        
-
-def build_model():
-    """
-    Simple call to Resnet50:
-    """  
-    return gennet.build_model('Resnet50', cfg.RPKIT_LabelsNum)
         
 
 def predict_file(img_path):
@@ -56,3 +49,33 @@ def train(nepochs=15):
     """ 
 
     return gennet.train(nepochs, 'Resnet50')
+    
+def main():
+    
+    if args.method == 'get_metadata':
+        get_metadata()
+    elif args.method == 'predict_file':
+        predict_file(args.file)
+    elif args.method == 'predict_data':
+        predict_data(args.file)
+    elif args.method == 'predict_url':
+        predict_url(args.url)
+    elif args.method == 'train':
+        train(args.nepochs)
+    else:
+        get_metadata()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Prepare data')
+    parser.add_argument('--method', type=str, default="get_metadata",
+                        help='Method to use: get_metadata (default), \
+                        predict_file, predict_data, predict_url, train')
+    parser.add_argument('--file', type=str, help='File to do prediction on, full path')
+    parser.add_argument('--url', type=str, help='URL with the image to do prediction on')
+    parser.add_argument('--nepochs', type=int, default=10, 
+                        help='Number of epochs to train on')    
+    args = parser.parse_args()         
+    
+    main()
+    

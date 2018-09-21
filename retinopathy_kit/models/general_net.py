@@ -14,7 +14,7 @@ import retinopathy_kit.config as cfg
 import retinopathy_kit.dataset.data_utils as dutils
 import retinopathy_kit.models.model_utils as mutils
 import retinopathy_kit.features.build_features as bfeatures
-from keras.layers import Dense, GlobalAveragePooling2D, Conv2D
+from keras.layers import Dense, GlobalAveragePooling2D, Conv2D, Dropout
 from keras.models import Sequential
 from keras.callbacks import ModelCheckpoint
 from keras import backend
@@ -61,9 +61,25 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #}
 
     net_model = Sequential()
-    #net_model.add(Conv2D(256, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
-    net_model.add(Conv2D(128, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
-    net_model.add(GlobalAveragePooling2D(input_shape=train_net.shape[1:]))
+    ###net_model.add(Conv2D(256, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
+    #+net_model.add(Conv2D(128, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
+    net_model.add(Conv2D(256, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
+    net_model.add(Dropout(0.25))
+    #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
+    #-net_model.add(Conv2D(256, (5, 5), input_shape=train_net.shape[1:], padding='same'))
+    #-net_model.add(Activation('relu'))
+    #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
+    #-net_model.add(Conv2D(384, (3, 3), padding='same'))
+    #-net_model.add(Activation('relu'))
+    # skip two following lines. without them the model learns a bit faster and better (?)
+    ##-inmodel.add(Conv2D(256, (3, 3)))
+    ##-inmodel.add(Activation('relu'))
+    #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
+
+    net_model.add(GlobalAveragePooling2D())
+    net_model.add(Dense(64, activation='relu'))   
+    net_model.add(Dense(64, activation='relu'))
+    net_model.add(Dense(16, activation='relu'))    
     net_model.add(Dense(nclasses, activation='softmax'))
 
     print("__"+network+"__: ")

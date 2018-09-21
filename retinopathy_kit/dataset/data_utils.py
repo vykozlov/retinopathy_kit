@@ -56,32 +56,50 @@ def load_dataset(data_path):
     :param path: path to dataset images
     :return: numpy array containing file paths to images, numpy array containing onehot-encoded classification labels
     """
-    #data = load_files(path)
-    #files = np.array(data['filenames'])
-    #targets = np_utils.to_categorical(np.array(data['target']), 133)
-    
-    #diagnosis = np.arrange(5)
+
     file_list = [ os.path.join(data_path, f) 
                   for f in os.listdir(data_path) 
                   if os.path.isfile(os.path.join(data_path, f)) ]
                      
     file_list.sort()
     
-    print(file_list[:10])
+    # remove file extension, i.e. everything after first "."
     files = [ os.path.basename(f).split('.', 1)[0] for f in file_list ]
-    print("Files: ", files[:10]) 
     
     df = pd.read_csv(cfg.RPKIT_LabelsTrain)
-    print(df.head(10))
     
     df = df.loc[df['image'].isin(files)]
     df = df.sort_values('image', axis=0)
-    print(df.head(20))
+    # toDo: can we sort pandas dataframe according to 'files' array??
+    # pd.reindex is for index..
+    # cross-check of the current solution shows that files sorted properly
+    # put cross-check here to avoid potential problem
+    
+    pd_files = df['image'].values
+    #for testing uncomment following lines:
+    #exchange = files[33]
+    #files[33] = files[55]
+    #files[55] = exchange    
+            
+    if not np.array_equal(files, pd_files):
+        checked = 0
+        missmatch = 0
+        for idx in range(len(files)):
+            if files[idx] != pd_files[idx]:
+                print("Files missmatch! File index %i : %s vs. %s" % (idx, files[idx], pd_files[idx]))
+                missmatch += 1
+            else:
+                    checked += 1
+        sys.exit("ERROR! Missmatch in image files order. Execution stops!")
+    else:
+        print("=> Order of image files is OK!")
+
     
     levels = df['level'].values
-    print(levels[:20])
+    print("One-hot encoding check:")
+    print(levels[:10])
     targets = np_utils.to_categorical(levels, 5)
-    print(targets[:20])
+    print(targets[:10])
     
     return np.array(file_list), np.array(targets)
 
