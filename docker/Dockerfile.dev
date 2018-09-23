@@ -5,7 +5,7 @@
 # $> docker run -ti -v ~/retinopathy_kit:/home dockerimage /bin/bash
 ##################
 # Base image, e.g. tensorflow/tensorflow:1.7.0
-FROM tensorflow/tensorflow:1.8.0
+FROM tensorflow/tensorflow:1.8.0-gpu
 
 LABEL maintainer='Valentin Kozlov (KIT)'
 # Retinopathy detection based on transfer learning (KIT)

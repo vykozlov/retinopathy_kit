@@ -8,6 +8,7 @@ Created on Mon Sep  3 21:29:57 2018
 import os
 import tempfile
 import numpy as np
+import pandas as pd
 import pkg_resources
 import werkzeug.exceptions as exceptions
 import retinopathy_kit.config as cfg
@@ -18,6 +19,7 @@ from keras.layers import Dense, GlobalAveragePooling2D, Conv2D, Dropout
 from keras.models import Sequential
 from keras.callbacks import ModelCheckpoint
 from keras import backend
+from keras import optimizers
 
 
 def get_metadata():
@@ -84,21 +86,21 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
 
     print("__"+network+"__: ")
     net_model.summary()
-    net_model.compile(loss='categorical_crossentropy', 
-                      optimizer='rmsprop', 
+    #opt = optimizers.RMSprop(lr=0.0002, rho=0.9, epsilon=0.1, decay=0.001)
+    opt = optimizers.Adagrad(lr=0.002)
+    net_model.compile(loss='categorical_crossentropy',
+                      optimizer=opt,    #rmsprop, adagrad
                       metrics=['accuracy'])
     
     return net_model
-        
 
-def predict_file(img_path, network='Resnet50'):
+def predict(img_path, network='Resnet50'):
     """
     Function to make prediction which label is the closest
     :param img_path: image to classify, full path
     :param network: neural network to be used
     :return: most probable label
     """
-
     nets = {'VGG16': bfeatures.extract_VGG16,
             'VGG19': bfeatures.extract_VGG19,
             'Resnet50': bfeatures.extract_Resnet50,
@@ -110,6 +112,7 @@ def predict_file(img_path, network='Resnet50'):
     backend.clear_session()
     
     net_model = build_model(network)
+    
     saved_weights_path = os.path.join(cfg.BASE_DIR, 'models', 
                                       'weights.best.' + network + '.hdf5')
     net_model.load_weights(saved_weights_path)
@@ -119,14 +122,29 @@ def predict_file(img_path, network='Resnet50'):
     print("Bottleneck feature size:", bottleneck_feature.shape)
     # obtain predicted vector
     predicted_vector = net_model.predict(bottleneck_feature)
+    print("=> %s : index of max: %d" % 
+          (os.path.basename(img_path), np.argmax(predicted_vector[0])))
     print(predicted_vector)
     print("Sum:", np.sum(predicted_vector))
     
+    return predicted_vector
+        
+def predict_file(img_path, network='Resnet50'):
+    """
+    Function to make prediction which label is the closest
+    :param img_path: image to classify, full path
+    :param network: neural network to be used
+    :return: most probable label
+    """
+
+    # obtain predicted vector
+    predicted_vector = predict(img_path, network)
+      
     labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
     print("len_labels: ", len(labels))
     for i in range(len(labels)):
-        print(labels[i], " : ", predicted_vector[0][i]) 
-
+        print(labels[i], " : ", predicted_vector[0][i])
+    
     return mutils.format_prediction(labels, predicted_vector[0])
 
 
@@ -160,6 +178,86 @@ def predict_url(*args):
     message = 'Not (yet) implemented in the model (predict_url())'
     return message
         
+
+def predict_kaggle(test_path, sample_file, network='Resnet50'):
+    '''
+    Function to produce .csv output for Kaggle score
+    :param test_path: path to unseen test data
+    :param sample_file: sampleSubmission file to take list of necessary files
+    '''
+  
+    # store output file where sample_file is located
+    output_path = os.path.dirname(sample_file)
+    output_file_pfx = "test1stSubmission"
+
+    # define sub-function for inference
+    def predict_batch(network, img_paths):
+        
+        nets = {'VGG16': bfeatures.extract_VGG16,
+                'VGG19': bfeatures.extract_VGG19,
+                'Resnet50': bfeatures.extract_Resnet50,
+                'InceptionV3': bfeatures.extract_InceptionV3,
+                'Xception': bfeatures.extract_Xception,
+        }
+        # clear possible pre-existing sessions. important!
+        backend.clear_session()
+
+        net_model = build_model(network)    
+        saved_weights_path = os.path.join(cfg.BASE_DIR, 'models', 
+                                      'weights.best.' + network + '.hdf5')
+        net_model.load_weights(saved_weights_path)
+        bottleneck_features = nets[network](dutils.paths_to_tensor(img_paths))
+        predictions_batch = [np.argmax(net_model.predict(np.expand_dims(feature, axis=0))) for feature in bottleneck_features]
+        
+        return predictions_batch
+
+    # read sample_file in Pandas Dataframe. take 'image' column as index
+    df = pd.read_csv(sample_file, index_col='image')
+    #print(df.head(10))
+    imgs = []
+    imgs_batch = [] 
+    imgs_batch_paths = []
+    predictions = []
+    idx_int = 0
+    batch_size = 1000
+    for idx, row in df.iterrows():
+        #print(idx, df['level'][idx])
+        #print("=> ", idx, df.index[idx_int], idx_int)
+        imgs.append(idx)
+        imgs_batch.append(idx)
+        imgs_batch_paths.append(os.path.join(test_path, idx + '.jpeg'))
+        # do prediction on batch_size of samples (doing 1-by-1 is tooo slow!)
+        if idx_int%batch_size == 0 and idx_int > 0:
+            print("=> Predicting %i iterations %i, %s" %(batch_size, idx_int, idx))
+            print("=> N images = ", len(imgs_batch))
+            predictions_batch = predict_batch(network, imgs_batch_paths)
+            ##predictions_batch = [1]*len(imgs_batch) ##for tests
+            predictions.extend(predictions_batch)
+            df_batch = pd.DataFrame({"image" : imgs_batch, "level" : predictions_batch})
+            output_batch = os.path.join(output_path, output_file_pfx + str(idx_int) + '.csv')
+            # store intemediate results
+            df_batch.to_csv(output_batch, index=False)
+            # reset 'batch' arrays
+            imgs_batch = []
+            imgs_batch_paths = []
+            
+        # do prediction on remaining files if full sample is not integer of batch_size           
+        if idx == df.index[-1] and idx_int%batch_size > 0:
+            print("=> Predicting last iteration ", idx_int, idx)
+            predictions_batch = predict_batch(network, imgs_batch_paths)
+            ##predictions_batch = [0]*len(imgs_batch)  ##for tests
+            predictions.extend(predictions_batch)
+            df_batch = pd.DataFrame({"image" : imgs_batch, "level" : predictions_batch})
+            output_batch = os.path.join(output_path, output_file_pfx + str(idx_int) + '.csv')
+            df_batch.to_csv(output_batch, index=False)
+        
+        idx_int += 1
+            
+    # create final output file 
+    df_all = pd.DataFrame({"image" : imgs, "level" : predictions})
+    output_all = os.path.join(output_path, output_file_pfx + '.csv')
+    df_all.to_csv(output_all, index=False)
+    
 
 def train(nepochs=10, network='Resnet50'):
     """
