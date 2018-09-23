@@ -1,0 +1,5 @@
+not_found
+mild
+moderate
+severe
+proliferative
