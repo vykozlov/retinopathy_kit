@@ -110,9 +110,10 @@ def load_dataset(data_path):
     
     levels = df['level'].values
     print("One-hot encoding check:")
-    print(levels[:10])
+    print(levels[:5])
     targets = np_utils.to_categorical(levels, 5)
-    print(targets[:10])
+    print(targets[:5])
+    print(np.argmax(targets, axis=1)[:5])
     
     return np.array(file_list), np.array(targets)
 
