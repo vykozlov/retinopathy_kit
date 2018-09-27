@@ -219,7 +219,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
     imgs_batch_paths = []
     predictions = []
     idx_int = 0
-    batch_size = 1000
+    batch_size = 2048
     for idx, row in df.iterrows():
         #print(idx, df['level'][idx])
         #print("=> ", idx, df.index[idx_int], idx_int)
@@ -267,7 +267,7 @@ def train(nepochs=10, network='Resnet50'):
     # check if directories for train, tests, and valid exist:
     #dutils.maybe_download_and_extract()
     
-    Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data', cfg.RPKIT_DataDir)
+    Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data')
     train_files, train_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'train'))
     valid_files, valid_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'valid'))
     test_files, test_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'test'))
