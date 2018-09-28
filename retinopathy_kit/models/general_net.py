@@ -17,9 +17,10 @@ import retinopathy_kit.models.model_utils as mutils
 import retinopathy_kit.features.build_features as bfeatures
 from keras.layers import Dense, GlobalAveragePooling2D, Conv2D, Dropout
 from keras.models import Sequential
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 from keras import backend
 from keras import optimizers
+from keras.metrics import top_k_categorical_accuracy
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
@@ -93,12 +94,15 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     net_model.add(Dense(nclasses, activation='softmax'))
 
     print("__"+network+"__: ")
-    net_model.summary()
+    def top_2_accuracy(in_gt, in_pred):
+        return top_k_categorical_accuracy(in_gt, in_pred, k=2)    
     #opt = optimizers.RMSprop(lr=0.0002, rho=0.9, epsilon=0.1, decay=0.001)
     opt = optimizers.Adagrad(lr=0.002)
     net_model.compile(loss='categorical_crossentropy',
                       optimizer=opt,    #rmsprop, adagrad
-                      metrics=['accuracy'])
+                      metrics=['categorical_accuracy', top_2_accuracy])
+
+    net_model.summary()
     
     return net_model
 
@@ -345,10 +349,22 @@ def train_cnn(nepochs=10, network='Resnet50'):
     backend.clear_session()
  
     net_model = build_model(network)
+    
+    reduceLROnPlat = ReduceLROnPlateau(monitor='val_loss', 
+                                       factor=0.8, patience=3, 
+                                       verbose=1, mode='auto', 
+                                       epsilon=0.0001, 
+                                       cooldown=5, 
+                                       min_lr=0.0001)
+    early = EarlyStopping(monitor="val_loss", 
+                          mode="min", 
+                          patience=12) # probably needs to be more patient, but kaggle time is limited
+
+    callbacks_list = [checkpointer, early, reduceLROnPlat]    
         
     net_model.fit(train_net, train_targets, 
                   validation_data=(valid_net, valid_targets),
-                  epochs=nepochs, batch_size=20, callbacks=[checkpointer], verbose=1)
+                  epochs=nepochs, batch_size=16, callbacks=callbacks_list, verbose=1)
     
     net_model.load_weights(saved_weights_path)
     net_predictions = [np.argmax(net_model.predict(np.expand_dims(feature, axis=0))) for feature in test_net]
@@ -356,7 +372,12 @@ def train_cnn(nepochs=10, network='Resnet50'):
     # report test accuracy
     test_accuracy = 100.*np.sum(np.array(net_predictions)==np.argmax(test_targets, axis=1))/float(len(net_predictions))
     print('Test accuracy: %.4f%%' % test_accuracy)
-    
+
+    # generate a classification report for the model
+    print(classification_report(np.argmax(test_targets, axis=1), net_predictions))
+    # compute the raw accuracy with extra precision
+    acc = accuracy_score(np.argmax(test_targets, axis=1), net_predictions)
+    print("[INFO] score: {}".format(acc))    
 
     return mutils.format_train(network, test_accuracy, nepochs, data_size)
 

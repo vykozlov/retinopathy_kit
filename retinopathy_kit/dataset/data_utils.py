@@ -79,36 +79,15 @@ def load_dataset(data_path):
     # remove file extension, i.e. everything after first "."
     files = [ os.path.basename(f).split('.', 1)[0] for f in file_list ]
     
-    df = pd.read_csv(cfg.RPKIT_LabelsTrain)
-    
-    df = df.loc[df['image'].isin(files)]
-    df = df.sort_values('image', axis=0)
-    # toDo: can we sort pandas dataframe according to 'files' array??
-    # pd.reindex is for index..
-    # cross-check of the current solution shows that files sorted properly
-    # put cross-check here to avoid potential problem
-    
-    pd_files = df['image'].values
-    #for testing uncomment following lines:
-    #exchange = files[33]
-    #files[33] = files[55]
-    #files[55] = exchange    
-            
-    if not np.array_equal(files, pd_files):
-        checked = 0
-        missmatch = 0
-        for idx in range(len(files)):
-            if files[idx] != pd_files[idx]:
-                print("Files missmatch! File index %i : %s vs. %s" % (idx, files[idx], pd_files[idx]))
-                missmatch += 1
-            else:
-                    checked += 1
-        sys.exit("ERROR! Missmatch in image files order. Execution stops!")
-    else:
-        print("=> Order of image files is OK!")
+    df = pd.read_csv(cfg.RPKIT_LabelsTrain, index_col='image')
+    print(df.head(10))
+    print("10017_left: ", df.loc['10017_left', 'level'])
 
+    levels = []    
+    for one_file in files:
+        levels.append(df.loc[one_file, 'level'])
+        #print("%s : %i" % (one_file, df.loc[one_file]))
     
-    levels = df['level'].values
     print("One-hot encoding check:")
     print(levels[:5])
     targets = np_utils.to_categorical(levels, 5)
