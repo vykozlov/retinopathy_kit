@@ -11,8 +11,9 @@ import numpy as np
 import retinopathy_kit.dataset.data_utils as dutils
 from six.moves import urllib
 from tqdm import tqdm
+   
 
-def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, bottleneck_file = 'DogResnet50Data.npz'):
+def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, bottleneck_file = 'Resnet50_features_train.npz'):
     """
     Download bottleneck features if they do not exist locally.
     :param bottleneck_file: name of the file to download
@@ -23,8 +24,11 @@ def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, bottleneck
         os.makedirs(bottleneck_maindir)
 
     bottleneck_path = os.path.join(bottleneck_maindir, bottleneck_file)
-    bottleneck_url = bottleneck_storage.rstrip('/') + '/' + bottleneck_file
+    bottleneck_url = dutils.ncloud_download_path(directory='models/bottleneck_features',
+                                          ncloud_file=bottleneck_file)
 
+    print("Bottleneck_url: ", bottleneck_url)
+    
     # if bottleneck_features file does not exist, download it
     if not os.path.exists(bottleneck_path):
         def _progress(count, block_size, total_size):
@@ -35,6 +39,7 @@ def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, bottleneck
         print()
         statinfo = os.stat(bottleneck_path)
         print('Successfully downloaded', bottleneck_file, statinfo.st_size, 'bytes.')
+
         
 def build_features(img_files, set_type, network = 'Resnet50'):
     """Build bottleneck_features for set of files"""
@@ -54,19 +59,6 @@ def build_features(img_files, set_type, network = 'Resnet50'):
     
     return bottleneck_features
 
-def load_features_all(network = 'Resnet50'):
-    """Load features from the file"""
-
-    bottleneck_file = 'Dog' + network + 'Data.npz'
-    maybe_download_bottleneck(cfg.RPKIT_Storage, bottleneck_file)
-    
-    bottleneck_path = os.path.join(cfg.BASE_DIR,'models','bottleneck_features', bottleneck_file)
-    bottleneck_features = np.load(bottleneck_path)
-    train_net = bottleneck_features['train']
-    valid_net = bottleneck_features['valid']
-    test_net = bottleneck_features['test']
-    
-    return train_net, valid_net, test_net
     
 def load_features_set(data_type, network = 'Resnet50'):
     """Load features from the file

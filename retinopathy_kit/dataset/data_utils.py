@@ -2,12 +2,11 @@
 import os
 import sys
 import zipfile
+import re
 import numpy as np
 import pandas as pd
-import retinopathy_kit.config as cfg
-from sklearn.datasets import load_files       
+import retinopathy_kit.config as cfg       
 from keras.utils import np_utils
-from glob import glob
 from six.moves import urllib
 
 from keras.preprocessing import image                  
@@ -18,35 +17,49 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 ###
 
-def maybe_download_and_extract(dataset=cfg.RPKIT_DataDir, datasetURL=cfg.RPKIT_DatasetURL):
-  """Download and extract the zip archive.
-     Based on tensorflow tutorials."""
-  data_dir = os.path.join(cfg.BASE_DIR,'data')
-  if not os.path.exists(data_dir):
-      os.makedirs(data_dir)
+def ncloud_download_path(ncloudURL=cfg.RPKIT_Storage, 
+                         directory='models/bottleneck_features', 
+                         ncloud_file = 'Resnet50_features_train.npz'):
+    '''
+    Build link for downloading data from nextcloud share link
+    '''
+    bottleneck_url = ncloudURL.rstrip('/') + '/' + 'download?path='
+    directory = directory.rstrip('/')
+    directory = directory.lstrip('/')
+    directory = re.sub('/','%2F', directory)
+    bottleneck_url += directory + '&files=' + ncloud_file
+    
+    return bottleneck_url
 
-  rawdata_dir = os.path.join(data_dir,'raw')
-  if not os.path.exists(rawdata_dir):
-      os.makedirs(rawdata_dir)
+def maybe_download_and_extract(data_storage=cfg.RPKIT_Storage, dataset='train', data_file='train.zip'):
+    """Download and extract the zip archive.
+       Based on tensorflow tutorials."""
+    data_dir = os.path.join(cfg.BASE_DIR,'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+    rawdata_dir = os.path.join(data_dir,'raw')
+    if not os.path.exists(rawdata_dir):
+        os.makedirs(rawdata_dir)
   
+    dataURL = ncloud_download_path(directory='data/', ncloud_file=data_file)
 
-  if not os.path.exists(os.path.join(data_dir, dataset)):
-      filename = datasetURL.split('/')[-1]
-      filepath = os.path.join(rawdata_dir, filename)
+    if not os.path.exists(os.path.join(data_dir, dataset)):
+        filepath = os.path.join(rawdata_dir, data_file)
       
-      if not os.path.exists(filepath):
-          def _progress(count, block_size, total_size):
-              sys.stdout.write('\r>> Downloading %s %.1f%%' % (filename,
-                  float(count * block_size) / float(total_size) * 100.0))
-              sys.stdout.flush()
-          filepath, _ = urllib.request.urlretrieve(datasetURL, filepath, _progress)
-          print()
-          statinfo = os.stat(filepath)
-          print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
+        if not os.path.exists(filepath):
+            def _progress(count, block_size, total_size):
+                sys.stdout.write('\r>> Downloading %s %.1f%%' % (data_file,
+                                 float(count * block_size) / float(total_size) * 100.0))
+                sys.stdout.flush()
+            filepath, _ = urllib.request.urlretrieve(dataURL, filepath, _progress)
+            print()
+            statinfo = os.stat(filepath)
+            print('Successfully downloaded', data_file, statinfo.st_size, 'bytes.')
 
-      dataset_zip = zipfile.ZipFile(filepath, 'r')    
-      dataset_zip.extractall(data_dir)
-      dataset_zip.close()
+        dataset_zip = zipfile.ZipFile(filepath, 'r')    
+        dataset_zip.extractall(data_dir)
+        dataset_zip.close()
 
 
 # define function to load train, test, and validation datasets
@@ -97,9 +110,10 @@ def load_dataset(data_path):
     
     levels = df['level'].values
     print("One-hot encoding check:")
-    print(levels[:10])
+    print(levels[:5])
     targets = np_utils.to_categorical(levels, 5)
-    print(targets[:10])
+    print(targets[:5])
+    print(np.argmax(targets, axis=1)[:5])
     
     return np.array(file_list), np.array(targets)
 

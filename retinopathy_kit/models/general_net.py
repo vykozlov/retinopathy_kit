@@ -21,6 +21,14 @@ from keras.callbacks import ModelCheckpoint
 from keras import backend
 from keras import optimizers
 
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score
+from six.moves import cPickle as pickle
+
+from sklearn.ensemble import RandomForestClassifier
+
 
 def get_metadata():
     
@@ -94,7 +102,7 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     
     return net_model
 
-def predict(img_path, network='Resnet50'):
+def predict_cnn(img_path, network='Resnet50'):
     """
     Function to make prediction which label is the closest
     :param img_path: image to classify, full path
@@ -128,8 +136,44 @@ def predict(img_path, network='Resnet50'):
     print("Sum:", np.sum(predicted_vector))
     
     return predicted_vector
+    
+def predict_logreg(img_path, network='Resnet50'):
+    """
+    Function to make prediction which label is the closest
+    :param img_path: image to classify, full path
+    :param network: neural network to be used
+    :return: most probable label
+    """
+    nets = {'VGG16': bfeatures.extract_VGG16,
+            'VGG19': bfeatures.extract_VGG19,
+            'Resnet50': bfeatures.extract_Resnet50,
+            'InceptionV3': bfeatures.extract_InceptionV3,
+            'Xception': bfeatures.extract_Xception,
+    }
+
+    # clear possible pre-existing sessions. important!
+    backend.clear_session()
+      
+    saved_model_path = os.path.join(cfg.BASE_DIR, 'models', 
+                                      'logreg.best.' + network + '.pkl')
+
+    with open(saved_model_path, 'rb') as file:  
+        net_model = pickle.load(file)
+    
+    # extract bottleneck features
+    bottleneck_feature = nets[network](dutils.path_to_tensor(img_path))
+    bottleneck_feature = bottleneck_feature.reshape((bottleneck_feature.shape[0], 2048))    
+    print("Bottleneck feature size:", bottleneck_feature.shape)
+    # obtain predicted vector
+    predicted_vector = net_model.predict_proba(bottleneck_feature)
+    print("=> %s : index of max: %d" % 
+          (os.path.basename(img_path), np.argmax(predicted_vector[0])))
+    print(predicted_vector)
+    print("Sum:", np.sum(predicted_vector))
+    
+    return predicted_vector    
         
-def predict_file(img_path, network='Resnet50'):
+def predict_file(img_path, network='Resnet50', model='cnn'):
     """
     Function to make prediction which label is the closest
     :param img_path: image to classify, full path
@@ -138,7 +182,10 @@ def predict_file(img_path, network='Resnet50'):
     """
 
     # obtain predicted vector
-    predicted_vector = predict(img_path, network)
+    if model == 'cnn':
+        predicted_vector = predict_cnn(img_path, network)
+    elif model == 'logreg':
+        predicted_vector = predict_logreg(img_path, network)
       
     labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
     print("len_labels: ", len(labels))
@@ -219,7 +266,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
     imgs_batch_paths = []
     predictions = []
     idx_int = 0
-    batch_size = 1000
+    batch_size = 2048
     for idx, row in df.iterrows():
         #print(idx, df['level'][idx])
         #print("=> ", idx, df.index[idx_int], idx_int)
@@ -259,7 +306,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
     df_all.to_csv(output_all, index=False)
     
 
-def train(nepochs=10, network='Resnet50'):
+def train_cnn(nepochs=10, network='Resnet50'):
     """
     Train network (transfer learning)
     """
@@ -267,7 +314,7 @@ def train(nepochs=10, network='Resnet50'):
     # check if directories for train, tests, and valid exist:
     #dutils.maybe_download_and_extract()
     
-    Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data', cfg.RPKIT_DataDir)
+    Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data')
     train_files, train_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'train'))
     valid_files, valid_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'valid'))
     test_files, test_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'test'))
@@ -312,3 +359,61 @@ def train(nepochs=10, network='Resnet50'):
     
 
     return mutils.format_train(network, test_accuracy, nepochs, data_size)
+
+def train_logreg(network='Resnet50'):
+    '''
+    Train non-neural network classifier, e.g. Logistic Regression or Random Forests 
+    '''
+    Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data')
+    train_files, train_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'train'))
+    valid_files, valid_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'valid'))
+    test_files, test_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'test'))
+
+    # convert one-hot encoded targets back to 'index numbers'    
+    train_targets = np.argmax(train_targets, axis=1)
+    valid_targets = np.argmax(valid_targets, axis=1)
+    test_targets = np.argmax(test_targets, axis=1)    
+    
+    train_net = bfeatures.load_features_set('train', network)
+    valid_net = bfeatures.load_features_set('valid', network)
+    test_net = bfeatures.load_features_set('test', network)
+    
+    # reshape the features so that each image is represented by
+    # a flattened feature vector of the `MaxPooling2D` outputs
+    # taken from https://github.com/jrosebr1/microsoft-dsvm/blob/master/pyimagesearch-22-minutes-to-2nd-place.ipynb
+    train_net = train_net.reshape((train_net.shape[0], 2048))
+    valid_net = valid_net.reshape((valid_net.shape[0], 2048))
+    test_net = test_net.reshape((test_net.shape[0], 2048))
+    
+    #train_net, valid_net, test_net = bfeatures.load_features_all(network)
+    print("Sizes of bottleneck_features (train, valid, test):")
+    print(train_net.shape, valid_net.shape, test_net.shape)
+    data_size = {
+        'train': len(train_targets),
+        'valid': len(valid_targets),
+        'test': len(test_targets)
+        }
+                                     
+    print("[INFO] tuning hyperparameters...")
+    params = {"C": [0.0001, 0.001, 0.01, 0.1, 1.0]}
+    clf = GridSearchCV(LogisticRegression(solver='lbfgs'), params, cv=5, n_jobs=-1)
+    #clf = RandomForestClassifier(n_estimators=256, oob_score=True, random_state=0)    
+    clf.fit(train_net, train_targets)
+    print("[INFO] best hyperparameters: {}".format(clf.best_params_))
+    #print("[INFO] best hyperparameters: {}".format(clf.oob_score_))
+       
+    # generate a classification report for the model
+    print("[INFO] evaluating...")
+    preds = clf.predict(test_net)
+    print(classification_report(test_targets, preds))
+
+    # compute the raw accuracy with extra precision
+    acc = accuracy_score(test_targets, preds)
+    print("[INFO] score: {}".format(acc))
+
+    saved_model_path = os.path.join(cfg.BASE_DIR, 'models', 
+                                     'logreg.best.' + network + '.pkl')
+
+    print("[INFO] storing model in %s ..." % (saved_model_path))
+    with open(saved_model_path, 'wb') as file:  
+        pickle.dump(clf.best_estimator_, file)

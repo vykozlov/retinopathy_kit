@@ -19,13 +19,13 @@ def get_metadata():
 
     return meta  
 
-def predict_file(img_path):
+def predict_file(img_path, model):
     """
     Simple call to gennet.predict_file() using Resnet50
     :param img_path: image to classify, full path  
     :return: most probable label
     """
-    return gennet.predict_file(img_path, 'Resnet50')
+    return gennet.predict_file(img_path, 'Resnet50', model)
 
 
 def predict_data(img):
@@ -48,19 +48,21 @@ def predict_kaggle(test_path, file_list):
     """    
     return gennet.predict_kaggle(test_path, file_list, 'Resnet50')
 
-def train(nepochs=15):
+def train(nepochs, model):
     """
     Simple call to gennet.train() using Resnet50
     """ 
-
-    return gennet.train(nepochs, 'Resnet50')
+    if model == 'cnn':
+        return gennet.train_cnn(nepochs, 'Resnet50')
+    elif model == 'logreg':
+        return gennet.train_logreg('Resnet50')
     
 def main():
     
     if args.method == 'get_metadata':
         get_metadata()       
     elif args.method == 'predict_file':
-        predict_file(args.file)
+        predict_file(args.file, model=args.model)
     elif args.method == 'predict_data':
         predict_data(args.file)
     elif args.method == 'predict_url':
@@ -70,7 +72,7 @@ def main():
         predict_kaggle(args.testpath, args.testfiles)
         print("Elapsed time:  ", time.time() - start)
     elif args.method == 'train':
-        train(args.nepochs)
+        train(args.nepochs, args.model)
     else:
         get_metadata()
 
@@ -80,6 +82,7 @@ if __name__ == '__main__':
     parser.add_argument('--method', type=str, default="get_metadata",
                         help='Method to use: get_metadata (default), \
                         predict_file, predict_data, predict_url, train')
+    parser.add_argument('--model', type=str, default='cnn', help='Model to use: cnn (default), logreg')
     parser.add_argument('--file', type=str, help='File to do prediction on, full path')
     parser.add_argument('--url', type=str, help='URL with the image to do prediction on')
     parser.add_argument('--testpath', type=str, help='Path to test files, full path')    
