@@ -88,9 +88,9 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
 
     net_model.add(GlobalAveragePooling2D())
-    net_model.add(Dense(64, activation='relu'))   
-    net_model.add(Dense(64, activation='relu'))
-    net_model.add(Dense(16, activation='relu'))    
+    net_model.add(Dense(64, activation='relu'))   #64
+    net_model.add(Dense(64, activation='relu'))   #64
+    net_model.add(Dense(16, activation='relu'))   #16
     net_model.add(Dense(nclasses, activation='softmax'))
 
     print("__"+network+"__: ")
@@ -402,9 +402,10 @@ def train_logreg(network='Resnet50'):
     # reshape the features so that each image is represented by
     # a flattened feature vector of the `MaxPooling2D` outputs
     # taken from https://github.com/jrosebr1/microsoft-dsvm/blob/master/pyimagesearch-22-minutes-to-2nd-place.ipynb
-    train_net = train_net.reshape((train_net.shape[0], 2048))
-    valid_net = valid_net.reshape((valid_net.shape[0], 2048))
-    test_net = test_net.reshape((test_net.shape[0], 2048))
+    newshape2 = train_net.shape[1]*train_net.shape[2]*train_net.shape[3]
+    train_net = train_net.reshape((train_net.shape[0], newshape2))
+    valid_net = valid_net.reshape((valid_net.shape[0], newshape2))
+    test_net = test_net.reshape((test_net.shape[0], newshape2))
     
     #train_net, valid_net, test_net = bfeatures.load_features_all(network)
     print("Sizes of bottleneck_features (train, valid, test):")
@@ -416,7 +417,7 @@ def train_logreg(network='Resnet50'):
         }
                                      
     print("[INFO] tuning hyperparameters...")
-    params = {"C": [0.0001, 0.001, 0.01, 0.1, 1.0]}
+    params = {"C": [0.001, 0.005, 0.01, 0.02, 0.1]}
     clf = GridSearchCV(LogisticRegression(solver='lbfgs'), params, cv=5, n_jobs=-1)
     #clf = RandomForestClassifier(n_estimators=256, oob_score=True, random_state=0)    
     clf.fit(train_net, train_targets)
