@@ -17,9 +17,10 @@ import retinopathy_kit.models.model_utils as mutils
 import retinopathy_kit.features.build_features as bfeatures
 from keras.layers import Dense, GlobalAveragePooling2D, Conv2D, Dropout
 from keras.models import Sequential
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 from keras import backend
 from keras import optimizers
+from keras.metrics import top_k_categorical_accuracy
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
@@ -87,18 +88,21 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
 
     net_model.add(GlobalAveragePooling2D())
-    net_model.add(Dense(64, activation='relu'))   
-    net_model.add(Dense(64, activation='relu'))
-    net_model.add(Dense(16, activation='relu'))    
+    net_model.add(Dense(64, activation='relu'))   #64
+    net_model.add(Dense(64, activation='relu'))   #64
+    net_model.add(Dense(16, activation='relu'))   #16
     net_model.add(Dense(nclasses, activation='softmax'))
 
     print("__"+network+"__: ")
-    net_model.summary()
+    def top_2_accuracy(in_gt, in_pred):
+        return top_k_categorical_accuracy(in_gt, in_pred, k=2)    
     #opt = optimizers.RMSprop(lr=0.0002, rho=0.9, epsilon=0.1, decay=0.001)
     opt = optimizers.Adagrad(lr=0.002)
     net_model.compile(loss='categorical_crossentropy',
                       optimizer=opt,    #rmsprop, adagrad
-                      metrics=['accuracy'])
+                      metrics=['categorical_accuracy', top_2_accuracy])
+
+    net_model.summary()
     
     return net_model
 
@@ -345,10 +349,22 @@ def train_cnn(nepochs=10, network='Resnet50'):
     backend.clear_session()
  
     net_model = build_model(network)
+    
+    reduceLROnPlat = ReduceLROnPlateau(monitor='val_loss', 
+                                       factor=0.8, patience=3, 
+                                       verbose=1, mode='auto', 
+                                       epsilon=0.0001, 
+                                       cooldown=5, 
+                                       min_lr=0.0001)
+    early = EarlyStopping(monitor="val_loss", 
+                          mode="min", 
+                          patience=12) # probably needs to be more patient, but kaggle time is limited
+
+    callbacks_list = [checkpointer, early, reduceLROnPlat]    
         
     net_model.fit(train_net, train_targets, 
                   validation_data=(valid_net, valid_targets),
-                  epochs=nepochs, batch_size=20, callbacks=[checkpointer], verbose=1)
+                  epochs=nepochs, batch_size=16, callbacks=callbacks_list, verbose=1)
     
     net_model.load_weights(saved_weights_path)
     net_predictions = [np.argmax(net_model.predict(np.expand_dims(feature, axis=0))) for feature in test_net]
@@ -356,7 +372,12 @@ def train_cnn(nepochs=10, network='Resnet50'):
     # report test accuracy
     test_accuracy = 100.*np.sum(np.array(net_predictions)==np.argmax(test_targets, axis=1))/float(len(net_predictions))
     print('Test accuracy: %.4f%%' % test_accuracy)
-    
+
+    # generate a classification report for the model
+    print(classification_report(np.argmax(test_targets, axis=1), net_predictions))
+    # compute the raw accuracy with extra precision
+    acc = accuracy_score(np.argmax(test_targets, axis=1), net_predictions)
+    print("[INFO] score: {}".format(acc))    
 
     return mutils.format_train(network, test_accuracy, nepochs, data_size)
 
@@ -381,9 +402,10 @@ def train_logreg(network='Resnet50'):
     # reshape the features so that each image is represented by
     # a flattened feature vector of the `MaxPooling2D` outputs
     # taken from https://github.com/jrosebr1/microsoft-dsvm/blob/master/pyimagesearch-22-minutes-to-2nd-place.ipynb
-    train_net = train_net.reshape((train_net.shape[0], 2048))
-    valid_net = valid_net.reshape((valid_net.shape[0], 2048))
-    test_net = test_net.reshape((test_net.shape[0], 2048))
+    newshape2 = train_net.shape[1]*train_net.shape[2]*train_net.shape[3]
+    train_net = train_net.reshape((train_net.shape[0], newshape2))
+    valid_net = valid_net.reshape((valid_net.shape[0], newshape2))
+    test_net = test_net.reshape((test_net.shape[0], newshape2))
     
     #train_net, valid_net, test_net = bfeatures.load_features_all(network)
     print("Sizes of bottleneck_features (train, valid, test):")
@@ -395,7 +417,7 @@ def train_logreg(network='Resnet50'):
         }
                                      
     print("[INFO] tuning hyperparameters...")
-    params = {"C": [0.0001, 0.001, 0.01, 0.1, 1.0]}
+    params = {"C": [0.001, 0.005, 0.01, 0.02, 0.1]}
     clf = GridSearchCV(LogisticRegression(solver='lbfgs'), params, cv=5, n_jobs=-1)
     #clf = RandomForestClassifier(n_estimators=256, oob_score=True, random_state=0)    
     clf.fit(train_net, train_targets)
