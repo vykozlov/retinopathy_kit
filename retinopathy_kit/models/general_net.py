@@ -30,6 +30,7 @@ from six.moves import cPickle as pickle
 
 from sklearn.ensemble import RandomForestClassifier
 
+input_shape = [16, 16, 8]
 
 def get_metadata():
     
@@ -72,9 +73,10 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #}
 
     net_model = Sequential()
+    #input_shape = train_net.shape[1:]  ## 16, 16, 8
     ###net_model.add(Conv2D(256, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
     #+net_model.add(Conv2D(128, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
-    net_model.add(Conv2D(256, (3,3), padding="same", input_shape=train_net.shape[1:], activation="relu"))
+    net_model.add(Conv2D(256, (3,3), padding="same", input_shape=input_shape, activation="relu"))
     net_model.add(Dropout(0.25))
     #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
     #-net_model.add(Conv2D(256, (5, 5), input_shape=train_net.shape[1:], padding='same'))
@@ -88,9 +90,8 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #-net_model.add(MaxPooling2D(pool_size=(3, 3), strides=2))
 
     net_model.add(GlobalAveragePooling2D())
-    net_model.add(Dense(64, activation='relu'))   #64
-    net_model.add(Dense(64, activation='relu'))   #64
-    net_model.add(Dense(16, activation='relu'))   #16
+    net_model.add(Dense(128, activation='relu'))   #64
+    net_model.add(Dense(128, activation='relu'))   #64
     net_model.add(Dense(nclasses, activation='softmax'))
 
     print("__"+network+"__: ")
@@ -99,7 +100,7 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #opt = optimizers.RMSprop(lr=0.0002, rho=0.9, epsilon=0.1, decay=0.001)
     opt = optimizers.Adagrad(lr=0.002)
     net_model.compile(loss='categorical_crossentropy',
-                      optimizer=opt,    #rmsprop, adagrad
+                      optimizer='adam',    #rmsprop, adagrad
                       metrics=['categorical_accuracy', top_2_accuracy])
 
     net_model.summary()
@@ -131,6 +132,7 @@ def predict_cnn(img_path, network='Resnet50'):
     
     # extract bottleneck features
     bottleneck_feature = nets[network](dutils.path_to_tensor(img_path))
+    bottleneck_feature = bottleneck_feature.reshape([bottleneck_feature.shape[0]] + input_shape) ##exp ## 16,16,8
     print("Bottleneck feature size:", bottleneck_feature.shape)
     # obtain predicted vector
     predicted_vector = net_model.predict(bottleneck_feature)
@@ -239,7 +241,8 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
   
     # store output file where sample_file is located
     output_path = os.path.dirname(sample_file)
-    output_file_pfx = "test1stSubmission"
+    sample_filename = sample_file.split('/')[-1]
+    output_file_pfx = sample_filename.split('.')[-1]
 
     # define sub-function for inference
     def predict_batch(network, img_paths):
@@ -327,7 +330,11 @@ def train_cnn(nepochs=10, network='Resnet50'):
     valid_net = bfeatures.load_features_set('valid', network)
     test_net = bfeatures.load_features_set('test', network)
     
-    print("Sizes test_files and test_targets::")    
+    train_net = train_net.reshape([train_net.shape[0]] + input_shape)  ##16, 16, 8
+    valid_net = valid_net.reshape([valid_net.shape[0]] + input_shape)
+    test_net = test_net.reshape([test_net.shape[0]] + input_shape)
+
+    print("Sizes test_files and test_targets::")
     print(test_files.shape) #, test_targets.shape)
     print(test_files[:10])
     #print(test_targets[:10])
