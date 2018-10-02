@@ -242,7 +242,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
     # store output file where sample_file is located
     output_path = os.path.dirname(sample_file)
     sample_filename = sample_file.split('/')[-1]
-    output_file_pfx = sample_filename.split('.')[-1]
+    output_file_pfx = sample_filename.split('.', 1)[0]
 
     # define sub-function for inference
     def predict_batch(network, img_paths):
@@ -261,6 +261,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
                                       'weights.best.' + network + '.hdf5')
         net_model.load_weights(saved_weights_path)
         bottleneck_features = nets[network](dutils.paths_to_tensor(img_paths))
+        bottleneck_features = bottleneck_features.reshape([bottleneck_features.shape[0]] + input_shape)  ## 16,16,8
         predictions_batch = [np.argmax(net_model.predict(np.expand_dims(feature, axis=0))) for feature in bottleneck_features]
         
         return predictions_batch
@@ -273,7 +274,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
     imgs_batch_paths = []
     predictions = []
     idx_int = 0
-    batch_size = 2048
+    batch_size = 5000
     for idx, row in df.iterrows():
         #print(idx, df['level'][idx])
         #print("=> ", idx, df.index[idx_int], idx_int)
