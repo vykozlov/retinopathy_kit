@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
-import sys
 import zipfile
-import re
+import subprocess
 import numpy as np
 import pandas as pd
 import retinopathy_kit.config as cfg       
 from keras.utils import np_utils
-from six.moves import urllib
 
 from keras.preprocessing import image                  
 from tqdm import tqdm
@@ -17,50 +15,107 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 ###
 
-def ncloud_download_path(ncloudURL=cfg.RPKIT_Storage, 
-                         directory='models/bottleneck_features', 
-                         ncloud_file = 'Resnet50_features_train.npz'):
-    '''
-    Build link for downloading data from nextcloud share link
-    '''
-    bottleneck_url = ncloudURL.rstrip('/') + '/' + 'download?path='
-    directory = directory.rstrip('/')
-    directory = directory.lstrip('/')
-    directory = re.sub('/','%2F', directory)
-    bottleneck_url += directory + '&files=' + ncloud_file
+
+def rclone_call(src_path, dest_dir, cmd = 'copy', get_output=False):
+    """ Function
+        rclone calls
+    """
+    if cmd == 'copy':
+        command = (['rclone', 'copy', '--progress', src_path, dest_dir]) #'--progress', 
+    elif cmd == 'ls':
+        command = (['rclone', 'ls', '-L', src_path])
+    elif cmd == 'check':
+        command = (['rclone', 'check', src_path, dest_dir])
     
-    return bottleneck_url
+    if get_output:
+        result = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        result = subprocess.Popen(command, stderr=subprocess.PIPE)
+    output, error = result.communicate()
+    return output, error
 
-def maybe_download_and_extract(data_storage=cfg.RPKIT_Storage, dataset='train', data_file='train.zip'):
-    """Download and extract the zip archive.
-       Based on tensorflow tutorials."""
-    data_dir = os.path.join(cfg.BASE_DIR,'data')
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
 
-    rawdata_dir = os.path.join(data_dir,'raw')
-    if not os.path.exists(rawdata_dir):
-        os.makedirs(rawdata_dir)
+def rclone_copy(src_path, dest_dir, src_type='file'):
+    """ Function for rclone call to copy data (sync?)
+    :param src_path: full path to source (file or directory)
+    :param dest_dir: full path to destination directory (not file!)
+    :param src_type: if source is file (default) or directory
+    :return: if destination was downloaded, and possible error 
+    """
+
+    error_out = None
+    
+    if src_type == 'file':
+        src_dir = os.path.dirname(src_path)
+        dest_file = src_path.split('/')[-1]
+        dest_path = os.path.join(dest_dir, dest_file)
+    else:
+        src_dir = src_path
+        dest_path =  dest_dir
+
+    # check first if we find src_path
+    output, error = rclone_call(src_path, dest_dir, cmd='ls')
+    if error:
+        print('[ERROR] %s (src):\n%s' % (src_path, error))
+        error_out = error
+        dest_exist = False
+    else:
+        # if src_path exists, copy it
+        output, error = rclone_call(src_path, dest_dir, cmd='copy')
+        if not error:
+            # compare two directories, if copied file appears in output
+            # as not found or not matching -> Error
+            print('[INFO] File %s copied. Check if (src) and (dest) really match..' % (dest_file))
+            output, error = rclone_call(src_dir, dest_dir, cmd='check')
+            if 'ERROR : ' + dest_file in error:
+                print('[ERROR] %s (src) and %s (dest) do not match!' % (src_path, dest_path))
+                error_out = 'Copy failed: ' + src_path + ' (src) and ' + \
+                             dest_path + ' (dest) do not match'
+                dest_exist = False
+            else:
+                output, error = rclone_call(dest_path, dest_dir, 
+                                            cmd='ls', get_output = True)
+                file_size = [ elem for elem in output.split(' ') if elem.isdigit() ][0]
+                print('[INFO] Checked: Successfully copied to %s %s bytes' % (dest_path, file_size))
+                dest_exist = True
+        else:
+            print('[ERROR] %s (src):\n%s' % (dest_path, error))
+            error_out = error
+            dest_exist = False
+
+    return dest_exist, error_out
+
+
+def maybe_download_and_extract(data_storage=cfg.RPKIT_Storage, 
+                               data_file='train.zip'):
+  """Download and extract the zip archive.
+  """
+  data_dir = os.path.join(cfg.BASE_DIR,'data')
+  if not os.path.exists(data_dir):
+      os.makedirs(data_dir)
+
+  rawdata_dir = os.path.join(data_dir,'raw')
+  if not os.path.exists(rawdata_dir):
+      os.makedirs(rawdata_dir)
   
-    dataURL = ncloud_download_path(directory='data/', ncloud_file=data_file)
+  data_URL = data_storage.rstrip('/') + \
+               os.path.join('/data/raw', data_file)
+               
+  data_name = os.path.splitext(data_file)[0]
 
-    if not os.path.exists(os.path.join(data_dir, dataset)):
-        filepath = os.path.join(rawdata_dir, data_file)
+  # if 'data_name' is not present locally, try to download and de-archive it
+  if not os.path.exists(os.path.join(data_dir, data_name)):
+      file_path = os.path.join(rawdata_dir, data_file)
       
-        if not os.path.exists(filepath):
-            def _progress(count, block_size, total_size):
-                sys.stdout.write('\r>> Downloading %s %.1f%%' % (data_file,
-                                 float(count * block_size) / float(total_size) * 100.0))
-                sys.stdout.flush()
-            filepath, _ = urllib.request.urlretrieve(dataURL, filepath, _progress)
-            print()
-            statinfo = os.stat(filepath)
-            print('Successfully downloaded', data_file, statinfo.st_size, 'bytes.')
+      # check if .zip file present in local ~/data/raw directory
+      if not os.path.exists(file_path):
+          status, _ = rclone_copy(data_URL, rawdata_dir)
 
-        dataset_zip = zipfile.ZipFile(filepath, 'r')    
-        dataset_zip.extractall(data_dir)
-        dataset_zip.close()
-
+      # if .zip is present locally, de-archive it 
+      if os.path.exists(file_path):
+          data_zip = zipfile.ZipFile(file_path, 'r')    
+          data_zip.extractall(data_dir)
+          data_zip.close()
 
 # define function to load train, test, and validation datasets
 def load_dataset(data_path):
@@ -119,8 +174,10 @@ def labels_read(labelsFile):
         with open(labelsFile, 'r') as listfile:
             labels = [ line.rstrip('\n') for line in listfile ]
     else:
-        print("Warning! File ", labelsFile, " doesn't exist. Trying to create ...")
+        print("[WARNING] File %s doesn't exist. Trying to create ..." % (labelsFile))
         labels = labels_create(labelsFile)
+        dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/data'
+        status, _ = rclone_copy(labelsFile, dest_dir)        
 
     return labels
 

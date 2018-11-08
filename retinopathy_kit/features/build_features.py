@@ -6,40 +6,31 @@ Feature building
 # import project config.py
 import retinopathy_kit.config as cfg
 import os
-import sys
 import numpy as np
 import retinopathy_kit.dataset.data_utils as dutils
-from six.moves import urllib
 from tqdm import tqdm
    
 
-def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, bottleneck_file = 'Resnet50_features_train.npz'):
+def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, 
+                              bottleneck_file = 'Resnet50_features_train.npz'):
     """
     Download bottleneck features if they do not exist locally.
     :param bottleneck_file: name of the file to download
     """
 
-    bottleneck_maindir = os.path.join(cfg.BASE_DIR,'models','bottleneck_features')
-    if not os.path.exists(bottleneck_maindir):
-        os.makedirs(bottleneck_maindir)
+    bottleneck_dir = os.path.join(cfg.BASE_DIR,'models','bottleneck_features')
+    if not os.path.exists(bottleneck_dir):
+        os.makedirs(bottleneck_dir)
 
-    bottleneck_path = os.path.join(bottleneck_maindir, bottleneck_file)
-    bottleneck_url = dutils.ncloud_download_path(directory='models/bottleneck_features',
-                                          ncloud_file=bottleneck_file)
+    bottleneck_url = bottleneck_storage.rstrip('/') + \
+                     os.path.join('/models/bottleneck_features', bottleneck_file)
 
     print("Bottleneck_url: ", bottleneck_url)
-    
+
+    bottleneck_path = os.path.join(bottleneck_dir, bottleneck_file)    
     # if bottleneck_features file does not exist, download it
     if not os.path.exists(bottleneck_path):
-        def _progress(count, block_size, total_size):
-            sys.stdout.write('\r>> Downloading %s %.1f%%' % (bottleneck_file,
-                float(count * block_size) / float(total_size) * 100.0))
-            sys.stdout.flush()
-        bottleneck_path, _ = urllib.request.urlretrieve(bottleneck_url, bottleneck_path, _progress)
-        print()
-        statinfo = os.stat(bottleneck_path)
-        print('Successfully downloaded', bottleneck_file, statinfo.st_size, 'bytes.')
-
+        status, _ = dutils.rclone_copy(bottleneck_url, bottleneck_dir)
         
 def build_features(img_files, set_type, network = 'Resnet50'):
     """Build bottleneck_features for set of files"""

@@ -56,6 +56,11 @@ def get_metadata():
     return meta
         
 
+def prepare_date():
+    """ Function to prepare data
+    """
+    
+
 def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     """
     Build network. Possible nets:
@@ -187,13 +192,14 @@ def predict_file(img_path, network='Resnet50', model='cnn'):
     :return: most probable label
     """
 
+    labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
+    
     # obtain predicted vector
     if model == 'cnn':
         predicted_vector = predict_cnn(img_path, network)
     elif model == 'logreg':
         predicted_vector = predict_logreg(img_path, network)
       
-    labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
     print("len_labels: ", len(labels))
     for i in range(len(labels)):
         print(labels[i], " : ", predicted_vector[0][i])
@@ -375,6 +381,8 @@ def train_cnn(nepochs=10, network='Resnet50'):
                   epochs=nepochs, batch_size=16, callbacks=callbacks_list, verbose=1)
     
     net_model.load_weights(saved_weights_path)
+
+    #test_net = test_net.reshape([test_net.shape[0]] + input_shape)  
     net_predictions = [np.argmax(net_model.predict(np.expand_dims(feature, axis=0))) for feature in test_net]
     
     # report test accuracy
@@ -386,6 +394,9 @@ def train_cnn(nepochs=10, network='Resnet50'):
     # compute the raw accuracy with extra precision
     acc = accuracy_score(np.argmax(test_targets, axis=1), net_predictions)
     print("[INFO] score: {}".format(acc))    
+
+    dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/models'
+    dutils.rclone_copy(saved_weights_path, dest_dir)
 
     return mutils.format_train(network, test_accuracy, nepochs, data_size)
 

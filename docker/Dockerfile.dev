@@ -5,7 +5,7 @@
 # $> docker run -ti -v ~/retinopathy_kit:/home dockerimage /bin/bash
 ##################
 # Base image, e.g. tensorflow/tensorflow:1.7.0
-FROM tensorflow/tensorflow:1.8.0-gpu
+FROM tensorflow/tensorflow:1.8.0
 
 LABEL maintainer='Valentin Kozlov (KIT)'
 # Retinopathy detection based on transfer learning (KIT)
@@ -23,12 +23,26 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     rm -rf /root/.cache/pip/* && \
     rm -rf /tmp/*
 
+# install rclone
+RUN wget https://downloads.rclone.org/rclone-current-linux-amd64.deb && \
+    dpkg -i rclone-current-linux-amd64.deb && \
+    apt install -f && \
+    rm rclone-current-linux-amd64.deb && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /root/.cache/pip/* && \
+    rm -rf /tmp/*
+
+
+# Set LANG environment
+ENV LANG C.UTF-8
+
 # Set the working directory
-WORKDIR /home
+WORKDIR /app
 
 # Install python packages listed in requirements.txt
-COPY requirements.txt /root
-RUN pip --no-cache-dir install -r /root/requirements.txt \
+COPY requirements-dev.txt /root
+RUN pip --no-cache-dir install -r /root/requirements-dev.txt \
 ### (OPTIONAL!) If you want to use Jupyter, uncomment:
 #        jupyter \
 #        jupyterlab && \
