@@ -62,16 +62,20 @@ def prepare_data(network='Resnet50'):
     # if not downloaded -> dutils.categories_create()
     status_categories, _ = dutils.maybe_download_data(data_dir='/data', 
                                                       data_file=cfg.RPKIT_Categories)
+    if not status_categories:
+        dutils.categories_create()
 
     # check if trainLabels.csv file exists locally, if not -> download,
     status_labels_train, _ = dutils.maybe_download_data(data_dir='/data', 
                                                         data_file=cfg.RPKIT_LabelsTrain)
                                                         
-    # check if bottleneck_features file for train exists locally
+    # check if bottleneck_features file fexists locally
+    # if not -> download it, if not downloaded -> try to build
+    # train
     bfeatures.check_features_set('train', network)
-    # check if bottleneck_features file for valid exists locally
+    # valid
     bfeatures.check_features_set('valid', network)
-    # check if bottleneck_features file for test exists locally                                                         
+    # test                                                         
     bfeatures.check_features_set('test', network)
 
 

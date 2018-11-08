@@ -184,32 +184,34 @@ def load_dataset(data_path):
     
     return np.array(file_list), np.array(targets)
 
-def categories_create(categories_file):
+def categories_create(categories_path=cfg.RPKIT_Categories):
     """
     Function to create categories file for retinopathy.
     :return:  list of string-valued categories
     """
     categories = ['not_found' , 'mild', 'moderate', 'severe', 'proliferative']
 
-    with open(categories_file, 'w') as listfile:
+    with open(categories_path, 'w') as listfile:
         for item in categories:
             listfile.write("%s\n" % item)
+
+    dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/data'
+    rclone_copy(categories_path, dest_dir)
+            
     return categories
 
-def categories_read(categories_file=cfg.RPKIT_Categories):
+def categories_read(categories_path=cfg.RPKIT_Categories):
     """
     Function to return categories read from the file.
     :return:  list of string-valued categories
     """
     
-    if os.path.isfile(categories_file):
-        with open(categories_file, 'r') as listfile:
+    if os.path.isfile(categories_path):
+        with open(categories_path, 'r') as listfile:
             labels = [ line.rstrip('\n') for line in listfile ]
     else:
-        print("[WARNING] File %s doesn't exist. Trying to create ..." % (categories_file))
-        labels = categories_create(categories_file)
-        dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/data'
-        status, _ = rclone_copy(categories_file, dest_dir)        
+        print("[WARNING] File %s doesn't exist. Trying to create ..." % (categories_path))
+        labels = categories_create(categories_path)        
 
     return labels
 
