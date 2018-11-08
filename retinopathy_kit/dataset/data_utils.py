@@ -85,37 +85,70 @@ def rclone_copy(src_path, dest_dir, src_type='file'):
 
     return dest_exist, error_out
 
+def maybe_download_data(remote_storage = cfg.RPKIT_Storage, 
+                        data_dir = '/models/bottleneck_features',
+                        data_file = 'Resnet50_features_train.npz'):
+    """
+    Download data if it does not exist locally.
+    :param data_dir: remote _and_ local dir to put data
+    :param data_file: name of the file to download
+    """
+    # status for data if exists or not
+    status = False
+    error_out = None
 
-def maybe_download_and_extract(data_storage=cfg.RPKIT_Storage, 
-                               data_file='train.zip'):
-  """Download and extract the zip archive.
-  """
-  data_dir = os.path.join(cfg.BASE_DIR,'data')
-  if not os.path.exists(data_dir):
-      os.makedirs(data_dir)
+    data_dir = data_dir.lstrip('/') #does not join if data_dir starts with '/'!
+    data_dir = data_dir.rstrip('/')
+    
+    #check that every sub directory exists locally, if not -> create
+    data_subdirs = data_dir.split('/')
+    sub_dir = cfg.BASE_DIR
+    for sdir in data_subdirs:
+        sub_dir = os.path.join(sub_dir, sdir)
+        if not os.path.exists(sub_dir):
+            os.makedirs(sub_dir)
 
-  rawdata_dir = os.path.join(data_dir,'raw')
-  if not os.path.exists(rawdata_dir):
-      os.makedirs(rawdata_dir)
+    remote_url = remote_storage.rstrip('/') + '/' + \
+                 os.path.join(data_dir, data_file)
+
+    local_dir = os.path.join(cfg.BASE_DIR, data_dir)
+    local_path = os.path.join(local_dir, data_file)
+    # if data_file does not exist locally, download it
+    if not os.path.exists(local_path):
+        print("[INFO] Url: %s" % (remote_url))
+        print("[INFO] Local path: %s" % (local_path))        
+        status, error_out = rclone_copy(remote_url, local_dir)
+    else:
+        status = True
+        error_out = None
+        
+    return status, error_out
+
+def maybe_download_and_unzip(data_storage=cfg.RPKIT_Storage,
+                             data_dir='/data/raw',
+                             data_file='train.zip'):
+    """Download and extract the zip archive.
+    """
   
-  data_URL = data_storage.rstrip('/') + \
-               os.path.join('/data/raw', data_file)
-               
-  data_name = os.path.splitext(data_file)[0]
+    # for now we assume that everything gets unzipped in ~/data directory
+    unzip_dir = os.path.join(cfg.BASE_DIR, 'data')
+  
+    # remove last extension, should be .zip
+    data_name = os.path.splitext(data_file)[0]
 
-  # if 'data_name' is not present locally, try to download and de-archive it
-  if not os.path.exists(os.path.join(data_dir, data_name)):
-      file_path = os.path.join(rawdata_dir, data_file)
-      
-      # check if .zip file present in local ~/data/raw directory
-      if not os.path.exists(file_path):
-          status, _ = rclone_copy(data_URL, rawdata_dir)
+    # if 'data_name' is not present locally, 
+    # try to download and de-archive corresponding .zip file
+    if not os.path.exists(os.path.join(cfg.BASE_DIR, unzip_dir, data_name)):
+        # check if .zip file present in locally
+        status, _ = maybe_download_data(data_storage, data_dir, data_file)
 
-      # if .zip is present locally, de-archive it 
-      if os.path.exists(file_path):
-          data_zip = zipfile.ZipFile(file_path, 'r')    
-          data_zip.extractall(data_dir)
-          data_zip.close()
+        # if .zip is present locally, de-archive it
+        file_path = os.path.join(cfg.BASE_DIR, data_dir, data_file)
+        if os.path.exists(file_path):
+            data_zip = zipfile.ZipFile(file_path, 'r')
+            data_zip.extractall(data_dir)
+            data_zip.close()
+
 
 # define function to load train, test, and validation datasets
 def load_dataset(data_path):
@@ -151,33 +184,32 @@ def load_dataset(data_path):
     
     return np.array(file_list), np.array(targets)
 
-def labels_create(labelsFile):
+def categories_create(categories_file):
     """
-    Function to create labeles for retinopathy.
-    Also creates .txt file with the names
-    :return:  list of string-valued labels 
+    Function to create categories file for retinopathy.
+    :return:  list of string-valued categories
     """
-    labels = ['not_found' , 'mild', 'moderate', 'severe', 'proliferative']
+    categories = ['not_found' , 'mild', 'moderate', 'severe', 'proliferative']
 
-    with open(labelsFile, 'w') as listfile:
-        for item in labels:
+    with open(categories_file, 'w') as listfile:
+        for item in categories:
             listfile.write("%s\n" % item)
-    return labels
+    return categories
 
-def labels_read(labelsFile):
+def categories_read(categories_file=cfg.RPKIT_Categories):
     """
-    Function to return labels read from the file.
-    :return:  list of string-valued labels
+    Function to return categories read from the file.
+    :return:  list of string-valued categories
     """
     
-    if os.path.isfile(labelsFile):
-        with open(labelsFile, 'r') as listfile:
+    if os.path.isfile(categories_file):
+        with open(categories_file, 'r') as listfile:
             labels = [ line.rstrip('\n') for line in listfile ]
     else:
-        print("[WARNING] File %s doesn't exist. Trying to create ..." % (labelsFile))
-        labels = labels_create(labelsFile)
+        print("[WARNING] File %s doesn't exist. Trying to create ..." % (categories_file))
+        labels = categories_create(categories_file)
         dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/data'
-        status, _ = rclone_copy(labelsFile, dest_dir)        
+        status, _ = rclone_copy(categories_file, dest_dir)        
 
     return labels
 

@@ -19,6 +19,12 @@ def get_metadata():
 
     return meta  
 
+def prepare_data():
+    """
+    Simple call to gennet.prepare_data() using Resnet50 
+    """
+    gennet.prepare_data('Resnet50')
+
 def predict_file(img_path, model):
     """
     Simple call to gennet.predict_file() using Resnet50
@@ -58,20 +64,25 @@ def train(nepochs, model):
         return gennet.train_logreg('Resnet50')
     
 def main():
-    
+   
     if args.method == 'get_metadata':
         get_metadata()       
     elif args.method == 'predict_file':
+        prepare_data()
         predict_file(args.file, model=args.model)
     elif args.method == 'predict_data':
+        prepare_data()
         predict_data(args.file)
     elif args.method == 'predict_url':
+        prepare_data()
         predict_url(args.url)
     elif args.method == 'predict_kaggle':
+        prepare_data()
         start = time.time()          
         predict_kaggle(args.testpath, args.testfiles)
         print("Elapsed time:  ", time.time() - start)
     elif args.method == 'train':
+        prepare_data()
         train(args.nepochs, args.model)
     else:
         get_metadata()

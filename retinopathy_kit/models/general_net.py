@@ -55,10 +55,25 @@ def get_metadata():
     return meta
         
 
-def prepare_date():
+def prepare_data(network='Resnet50'):
     """ Function to prepare data
     """
-    
+    # check if categories file exists locally, if not -> download,
+    # if not downloaded -> dutils.categories_create()
+    status_categories, _ = dutils.maybe_download_data(data_dir='/data', 
+                                                      data_file=cfg.RPKIT_Categories)
+
+    # check if trainLabels.csv file exists locally, if not -> download,
+    status_labels_train, _ = dutils.maybe_download_data(data_dir='/data', 
+                                                        data_file=cfg.RPKIT_LabelsTrain)
+                                                        
+    # check if bottleneck_features file for train exists locally
+    bfeatures.check_features_set('train', network)
+    # check if bottleneck_features file for valid exists locally
+    bfeatures.check_features_set('valid', network)
+    # check if bottleneck_features file for test exists locally                                                         
+    bfeatures.check_features_set('test', network)
+
 
 def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     """
@@ -191,7 +206,7 @@ def predict_file(img_path, network='Resnet50', model='cnn'):
     :return: most probable label
     """
 
-    labels  = dutils.labels_read(cfg.RPKIT_LabelsFile)
+    categories  = dutils.categories_read()
     
     # obtain predicted vector
     if model == 'cnn':
@@ -199,11 +214,11 @@ def predict_file(img_path, network='Resnet50', model='cnn'):
     elif model == 'logreg':
         predicted_vector = predict_logreg(img_path, network)
       
-    print("len_labels: ", len(labels))
-    for i in range(len(labels)):
-        print(labels[i], " : ", predicted_vector[0][i])
+    print("len_categories: ", len(categories))
+    for i in range(len(categories)):
+        print(categories[i], " : ", predicted_vector[0][i])
     
-    return mutils.format_prediction(labels, predicted_vector[0])
+    return mutils.format_prediction(categories, predicted_vector[0])
 
 
 def predict_data(img, network='Resnet50'):

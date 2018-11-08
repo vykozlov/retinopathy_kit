@@ -9,39 +9,13 @@ import os
 import numpy as np
 import retinopathy_kit.dataset.data_utils as dutils
 #from tqdm import tqdm
-   
 
-def maybe_download_data(remote_storage = cfg.RPKIT_Storage, 
-                        data_dir = '/models/bottleneck_features',
-                        data_file = 'Resnet50_features_train.npz'):
+def set_feature_file(data_type, network = 'Resnet50'):
+    """ Construct file name for the bottleneck file
     """
-    Download data if it does not exist locally.
-    :param data_dir: remote _and_ local dir to put data
-    :param data_file: name of the file to download
-    """
-    # status for data if exists or not
-    status = False
+    return network + '_features_' + data_type + '.npz'
 
-    data_dir = data_dir.lstrip('/') #does not join if data_dir starts with '/'!
-    local_dir = os.path.join(cfg.BASE_DIR, data_dir) 
-    if not os.path.exists(local_dir):
-        os.makedirs(local_dir)
-
-    remote_url = remote_storage.rstrip('/') + '/' + \
-                 os.path.join(data_dir, data_file)
-
-    local_path = os.path.join(local_dir, data_file)
-    # if data_file does not exist locally, download it
-    if not os.path.exists(local_path):
-        print("[INFO] Url: %s" % (remote_url))
-        print("[INFO] Local path: %s" % (local_path))        
-        status, _ = dutils.rclone_copy(remote_url, local_dir)
-    else:
-        status = True
-        
-    return status
-        
-def build_features(img_files, set_type, network = 'Resnet50'):
+def build_features_set(img_files, set_type, network = 'Resnet50'):
     """Build bottleneck_features for set of files"""
 
     nets = {'VGG16': extract_VGG16,
@@ -52,26 +26,57 @@ def build_features(img_files, set_type, network = 'Resnet50'):
     }
     
     bottleneck_features = nets[network](dutils.paths_to_tensor(img_files))
-    np.savez(os.path.join(cfg.BASE_DIR, 'models', 'bottleneck_features', 
-             network + 'features_' + set_type), set_type=bottleneck_features)  
+
+    bottleneck_file =  set_feature_file(set_type, network)
+    bottleneck_path = os.path.join(cfg.BASE_DIR,'models',
+                                   'bottleneck_features', bottleneck_file)
+
+    if set_type == 'train':
+        np.savez(bottleneck_path, train=bottleneck_features)
+    elif set_type == 'test':
+        np.savez(bottleneck_path, test=bottleneck_features)
+    elif set_type == 'valid':
+        np.savez(bottleneck_path, valid=bottleneck_features)
+    else:
+        np.savez(bottleneck_path, features=bottleneck_features)
     
-    print("Bottleneck features size (build_features):", bottleneck_features.shape)    
+    print("[INFO] Bottleneck features size (build_features):", bottleneck_features.shape)    
     
     return bottleneck_features
 
-    
+
+def check_features_set(data_type, network = 'Resnet50'):
+    """Check if features file exists locally
+       Only one dataset, e.g. train, valid, test is checked
+    """
+    bottleneck_file =  set_feature_file(data_type, network)
+    bottleneck_exists, _ = dutils.maybe_download_data(
+                                    data_dir='/models/bottleneck_features',
+                                    data_file = bottleneck_file)        
+
+    if not bottleneck_exists:
+        print("[INFO] %s was neither found nor downloaded. Trying to build. It may take time .. " 
+              % bottleneck_file)
+        data_dir = os.path.join(cfg.BASE_DIR,'data', data_type)
+        img_files, targets = dutils.load_dataset(data_dir)
+        build_features_set(img_files, data_type, network)
+        
+        bottleneck_path = os.path.join(cfg.BASE_DIR,'models',
+                                       'bottleneck_features', bottleneck_file)
+        dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/models/bottleneck_features'
+        dutils.rclone_copy(bottleneck_path, dest_dir)
+
 def load_features_set(data_type, network = 'Resnet50'):
     """Load features from the file
        Only one dataset, e.g. train, valid, test is loaded
     """
-
-    bottleneck_file = network + '_features_' + data_type + '.npz'
-    maybe_download_data(data_file = bottleneck_file)
-    
-    bottleneck_path = os.path.join(cfg.BASE_DIR,'models','bottleneck_features', bottleneck_file)
+    bottleneck_file =  set_feature_file(data_type, network)
+    bottleneck_path = os.path.join(cfg.BASE_DIR,'models',
+                                   'bottleneck_features', bottleneck_file)
+    print("[INFO] Using %s" % bottleneck_file)
     bottleneck_features = np.load(bottleneck_path)[data_type]
 
-    return bottleneck_features
+    return bottleneck_features    
 
 def extract_VGG16(tensor):
 	from keras.applications.vgg16 import VGG16, preprocess_input
