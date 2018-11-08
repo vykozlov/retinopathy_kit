@@ -8,29 +8,38 @@ import retinopathy_kit.config as cfg
 import os
 import numpy as np
 import retinopathy_kit.dataset.data_utils as dutils
-from tqdm import tqdm
+#from tqdm import tqdm
    
 
-def maybe_download_bottleneck(bottleneck_storage = cfg.RPKIT_Storage, 
-                              bottleneck_file = 'Resnet50_features_train.npz'):
+def maybe_download_data(remote_storage = cfg.RPKIT_Storage, 
+                        data_dir = '/models/bottleneck_features',
+                        data_file = 'Resnet50_features_train.npz'):
     """
-    Download bottleneck features if they do not exist locally.
-    :param bottleneck_file: name of the file to download
+    Download data if it does not exist locally.
+    :param data_dir: remote _and_ local dir to put data
+    :param data_file: name of the file to download
     """
+    # status for data if exists or not
+    status = False
 
-    bottleneck_dir = os.path.join(cfg.BASE_DIR,'models','bottleneck_features')
-    if not os.path.exists(bottleneck_dir):
-        os.makedirs(bottleneck_dir)
+    data_dir = data_dir.lstrip('/') #does not join if data_dir starts with '/'!
+    local_dir = os.path.join(cfg.BASE_DIR, data_dir) 
+    if not os.path.exists(local_dir):
+        os.makedirs(local_dir)
 
-    bottleneck_url = bottleneck_storage.rstrip('/') + \
-                     os.path.join('/models/bottleneck_features', bottleneck_file)
+    remote_url = remote_storage.rstrip('/') + '/' + \
+                 os.path.join(data_dir, data_file)
 
-    print("Bottleneck_url: ", bottleneck_url)
-
-    bottleneck_path = os.path.join(bottleneck_dir, bottleneck_file)    
-    # if bottleneck_features file does not exist, download it
-    if not os.path.exists(bottleneck_path):
-        status, _ = dutils.rclone_copy(bottleneck_url, bottleneck_dir)
+    local_path = os.path.join(local_dir, data_file)
+    # if data_file does not exist locally, download it
+    if not os.path.exists(local_path):
+        print("[INFO] Url: %s" % (remote_url))
+        print("[INFO] Local path: %s" % (local_path))        
+        status, _ = dutils.rclone_copy(remote_url, local_dir)
+    else:
+        status = True
+        
+    return status
         
 def build_features(img_files, set_type, network = 'Resnet50'):
     """Build bottleneck_features for set of files"""
@@ -57,7 +66,7 @@ def load_features_set(data_type, network = 'Resnet50'):
     """
 
     bottleneck_file = network + '_features_' + data_type + '.npz'
-    maybe_download_bottleneck(cfg.RPKIT_Storage, bottleneck_file)
+    maybe_download_data(data_file = bottleneck_file)
     
     bottleneck_path = os.path.join(cfg.BASE_DIR,'models','bottleneck_features', bottleneck_file)
     bottleneck_features = np.load(bottleneck_path)[data_type]

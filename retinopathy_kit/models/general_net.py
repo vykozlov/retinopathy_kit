@@ -10,7 +10,6 @@ import tempfile
 import numpy as np
 import pandas as pd
 import pkg_resources
-import werkzeug.exceptions as exceptions
 import retinopathy_kit.config as cfg
 import retinopathy_kit.dataset.data_utils as dutils
 import retinopathy_kit.models.model_utils as mutils
@@ -28,7 +27,7 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import accuracy_score
 from six.moves import cPickle as pickle
 
-from sklearn.ensemble import RandomForestClassifier
+#from sklearn.ensemble import RandomForestClassifier
 
 input_shape = [16, 16, 8]
 
@@ -105,7 +104,7 @@ def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
     #opt = optimizers.RMSprop(lr=0.0002, rho=0.9, epsilon=0.1, decay=0.001)
     opt = optimizers.Adagrad(lr=0.002)
     net_model.compile(loss='categorical_crossentropy',
-                      optimizer='adam',    #rmsprop, adagrad
+                      optimizer='adam',    #opt, 'rmsprop', 'adagrad', 'adam'
                       metrics=['categorical_accuracy', top_2_accuracy])
 
     net_model.summary()
