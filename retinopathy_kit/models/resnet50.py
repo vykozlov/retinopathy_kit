@@ -79,11 +79,11 @@ def main():
     elif args.method == 'predict_kaggle':
         prepare_data()
         start = time.time()          
-        predict_kaggle(args.testpath, args.testfiles)
+        predict_kaggle(args.test_path, args.test_files)
         print("Elapsed time:  ", time.time() - start)
     elif args.method == 'train':
         prepare_data()
-        train(args.nepochs, args.model)
+        train(args.n_epochs, args.model)
     else:
         get_metadata()
 
@@ -96,9 +96,9 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='cnn', help='Model to use: cnn (default), logreg')
     parser.add_argument('--file', type=str, help='File to do prediction on, full path')
     parser.add_argument('--url', type=str, help='URL with the image to do prediction on')
-    parser.add_argument('--testpath', type=str, help='Path to test files, full path')    
-    parser.add_argument('--testfiles', type=str, help='File list (csv) with test files, full path')        
-    parser.add_argument('--nepochs', type=int, default=15, 
+    parser.add_argument('--test_path', type=str, help='Path to test files, full path')    
+    parser.add_argument('--test_files', type=str, help='File list (csv) with test files, full path')        
+    parser.add_argument('--n_epochs', type=int, default=15, 
                         help='Number of epochs to train on')    
     args = parser.parse_args()         
     

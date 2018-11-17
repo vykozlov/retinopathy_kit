@@ -13,6 +13,7 @@ import pkg_resources
 import retinopathy_kit.config as cfg
 import retinopathy_kit.dataset.data_utils as dutils
 import retinopathy_kit.models.model_utils as mutils
+import retinopathy_kit.dataset.make_dataset as mdata
 import retinopathy_kit.features.build_features as bfeatures
 from keras.layers import Dense, GlobalAveragePooling2D, Conv2D, Dropout
 from keras.models import Sequential
@@ -54,29 +55,10 @@ def get_metadata():
                 
     return meta
         
-
 def prepare_data(network='Resnet50'):
     """ Function to prepare data
     """
-    # check if categories file exists locally, if not -> download,
-    # if not downloaded -> dutils.categories_create()
-    status_categories, _ = dutils.maybe_download_data(data_dir='/data', 
-                                                      data_file=cfg.RPKIT_Categories)
-    if not status_categories:
-        dutils.categories_create()
-
-    # check if trainLabels.csv file exists locally, if not -> download,
-    status_labels_train, _ = dutils.maybe_download_data(data_dir='/data', 
-                                                        data_file=cfg.RPKIT_LabelsTrain)
-                                                        
-    # check if bottleneck_features file fexists locally
-    # if not -> download it, if not downloaded -> try to build
-    # train
-    bfeatures.check_features_set('train', network)
-    # valid
-    bfeatures.check_features_set('valid', network)
-    # test                                                         
-    bfeatures.check_features_set('test', network)
+    mdata.prepare_data(network)
 
 
 def build_model(network='Resnet50', nclasses=cfg.RPKIT_LabelsNum):
@@ -338,7 +320,7 @@ def predict_kaggle(test_path, sample_file, network='Resnet50'):
     df_all.to_csv(output_all, index=False)
     
 
-def train_cnn(nepochs=10, network='Resnet50'):
+def train_cnn(nepochs=10, network='Resnet50', remote_storage=cfg.RPKIT_Storage):
     """
     Train network (transfer learning)
     """
@@ -346,10 +328,9 @@ def train_cnn(nepochs=10, network='Resnet50'):
     # check if directories for train, tests, and valid exist:
     #dutils.maybe_download_and_extract()
     
-    Data_ImagesDir = os.path.join(cfg.BASE_DIR,'data')
-    train_files, train_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'train'))
-    valid_files, valid_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'valid'))
-    test_files, test_targets = dutils.load_dataset(os.path.join(Data_ImagesDir,'test'))
+    train_targets = dutils.load_targets('train')
+    valid_targets = dutils.load_targets('valid')
+    test_targets = dutils.load_targets('test')
     
     train_net = bfeatures.load_features_set('train', network)
     valid_net = bfeatures.load_features_set('valid', network)
@@ -358,11 +339,6 @@ def train_cnn(nepochs=10, network='Resnet50'):
     train_net = train_net.reshape([train_net.shape[0]] + input_shape)  ##16, 16, 8
     valid_net = valid_net.reshape([valid_net.shape[0]] + input_shape)
     test_net = test_net.reshape([test_net.shape[0]] + input_shape)
-
-    print("Sizes test_files and test_targets::")
-    print(test_files.shape) #, test_targets.shape)
-    print(test_files[:10])
-    #print(test_targets[:10])
 
     #train_net, valid_net, test_net = bfeatures.load_features_all(network)
     print("Sizes of bottleneck_features (train, valid, test):")
@@ -413,7 +389,8 @@ def train_cnn(nepochs=10, network='Resnet50'):
     acc = accuracy_score(np.argmax(test_targets, axis=1), net_predictions)
     print("[INFO] score: {}".format(acc))    
 
-    dest_dir = cfg.RPKIT_Storage.rstrip('/') + '/models'
+    dest_dir = remote_storage.rstrip('/') + '/models'
+    print("[INFO] Upload %s to %s" % (saved_weights_path, dest_dir))    
     dutils.rclone_copy(saved_weights_path, dest_dir)
 
     return mutils.format_train(network, test_accuracy, nepochs, data_size)
